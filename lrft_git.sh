@@ -13,6 +13,7 @@ git branch -M main
 # git tag -a ${version} -m "try the function of release"
 git remote add origin git@github.com:Project-XWH/lrft_pub.git
 # git push origin ${version}
-git push origin main
+git pull origin master
+git push -u origin master
 
 

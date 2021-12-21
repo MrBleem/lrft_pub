@@ -1,4 +1,14 @@
 
+
+
+####
+
+# 比v1添加了insertion类型的判断，暂时将insertion的长度作为判断标准 
+
+####
+
+
+
 import datetime
 starttime = datetime.datetime.now()
 #long running
@@ -12,6 +22,9 @@ import pysam
 from operator import itemgetter, attrgetter
 from collections import Counter
 
+
+# 这个版本只用一种insertion的方法， max_deletion的方方法暂时不用
+# 因为想在大部分物种中使用，主要依靠一种思想比较靠谱
 
 # imput
 PROJECT_PATH = sys.argv[1]    # "/data/tusers/boxu/lrft/result/nanopore/human"
@@ -30,10 +43,15 @@ bamfile = pysam.AlignmentFile( DATA_PATH + BAMFILE, "rb" )
     # chrom = CHROMS.strip().split(',')
     # READS = bamfile.fetch( chrom[0], 10000, 1000000 )
 # else:
-READS = bamfile
+# READS = bamfile
 
-# READS = bamfile.fetch( "1" )
-# READS = bamfile.fetch( "1" , 951099, 951469)
+READS = bamfile.fetch( "1" )
+region="1:100,993,787-100,995,464"
+chr=region.split(':')[0]
+region_start=region.split(':')[1].split('-')[0].replace(',', '')
+region_end=region.split(':')[1].split('-')[1].replace(',', '')
+READS = bamfile.fetch( chr, int(region_start) , int(region_end))
+
 outFile = RESULT_PATH + PREFIX + ".lrft.table.txt"
 outfile = open(outFile, 'w')
 outfile.write('chr\tinsertion_start\tinsertion_end\tTE\tstrand\tsurpporting_reads\tun_surpporting_reads\tfrequency\tinsertion_type\tisnertion_te_length\tinsertion_te_sequence\n')
@@ -42,10 +60,11 @@ outfile.write('chr\tinsertion_start\tinsertion_end\tTE\tstrand\tsurpporting_read
 outFile_pickle = RESULT_PATH + PREFIX + ".lrft.cluster.pkl"
 SEQ_INFO_FILE = DATA_PATH + PREFIX.split('.')[0] + ".clip.reads.pkl"
 
-if os.path.exists(outFile_pickle):
-    print('?')
-    rm_args = ['rm', outFile_pickle]
-    subprocess.Popen(rm_args)
+
+# if os.path.exists(outFile_pickle):
+#     print('?')
+# rm_args = ['rm', outFile_pickle]
+# subprocess.Popen(rm_args)
 
 
 # 多序列比对
@@ -185,7 +204,7 @@ def get_insertion_position_novel(genome_map_position_start, clip_te_len, clip_le
     # 如果左边的clip 长度是0，可能是原reads只测到那里
     if clip_left_len == 0 or cigar_len_S >= clip_left_len:
         # insertion_position_start = genome_map_position_start - clip_te_len
-        # print('test')
+        print('test')
         insertion_position_start = genome_map_position_start - 1
         if insertion_position_start <=0 :
             insertion_position_start = 1
@@ -215,6 +234,7 @@ def get_insertion_position_novel(genome_map_position_start, clip_te_len, clip_le
             cigar_len_ex_D = cigar_len_dic['S'] + cigar_len_dic['M'] + cigar_len_dic['I']
             
             if cigar_len_ex_D < clip_left_len:
+                # deletion位置在clip前面的结果
                 if s[-1] == 'D' and int(s[:-1]) >= 50: 
                     if clip_left_len - cigar_len_ex_D < 100:
                         insertion_position_start = genome_map_position_start + ( cigar_len_dic['M'] +  cigar_len_dic['D'] - int(s[:-1])  ) -1
@@ -237,13 +257,30 @@ def get_insertion_position_novel(genome_map_position_start, clip_te_len, clip_le
                 if s[-1] == 'M':
                     insertion_position_start = genome_map_position_start + ( clip_left_len - cigar_len_dic['S'] + cigar_len_dic['D'] - cigar_len_dic['I'] ) -1
                     insertion_position_end = insertion_position_start + 1
-                    if i < s_cigar_len-1:
-                        
-                        s_next = s_cigar[i+1]
-                        print(s_next)
-                        if abs(cigar_len_ex_D - clip_left_len) <= 10 and  s_next[-1] == 'D' : 
-                            print('ck')
-                            insertion_position_end = insertion_position_start + int(s_next[:-1])
+                    # deletion在clip位置后面的情况
+                    # 在insertion位置两边延伸一个大概TSD的长度
+                    # 
+                    for j in range(5):
+                        if i+j+1 < s_cigar_len-1:
+                            s_next = s_cigar[i+j+1]
+                            print(s_next)
+                            cigar_len = cigar_len + int(s_next[:-1])
+                            cigar_len_dic[s_next[-1]] = cigar_len_dic[s_next[-1]] + int(s_next[:-1])
+                            cigar_len_ex_D = cigar_len_dic['S'] + cigar_len_dic['M'] + cigar_len_dic['I']
+                            print(cigar_len_ex_D,clip_left_len)
+
+                            if abs(cigar_len_ex_D - clip_left_len) <= 20 and  s_next[-1] == 'D' : 
+                                print('ck')
+                                # insertion_position_start = genome_map_position_start + ( clip_left_len - cigar_len_dic['S'] + cigar_len_dic['D'] - cigar_len_dic['I'] ) -1
+                                insertion_position_end = genome_map_position_start + ( cigar_len_dic['D'] +  cigar_len_dic['M'] ) -1
+                                insertion_position_start = insertion_position_end - int(s_next[:-1])
+                                break
+                    # if i < s_cigar_len-1:
+                    #     s_next = s_cigar[i+1]
+                    #     print(s_next)
+                    #     if abs(cigar_len_ex_D - clip_left_len) <= 10 and  s_next[-1] == 'D' : 
+                    #         print('ck')
+                    #         insertion_position_end = insertion_position_start + int(s_next[:-1])
                     q_position=cigar_len_ex_D
 
                 elif s[-1] == 'I':
@@ -297,7 +334,6 @@ def get_insertion_position_germline(genome_map_position_start, cigar, clip_left_
     # pre_insertion_cigar_l_D = sum([ int(l[:-1])  for l in re.findall('[0-9]*[D]',pre_insertion_cigar) ])
     
     if abs( pre_insertion_cigar_l - ( clip_left_len - s_cigar_S ) ) > 10000:
-        print('test')
         return get_insertion_position_germline(genome_map_position_start, re_cigar2, clip_left_len)
     else:
         insertion_position_start = genome_map_position_start + pre_insertion_cigar_l - pre_insertion_cigar_l_I
@@ -375,16 +411,19 @@ def Cluster_raeds(READS):
         else:
             cigar_len_S_l = 0
         
-        if cigar_len_S_f >= clip_left_len or cigar_len_S_l >= clip_right_len:
+        if cigar_len_S_f > clip_left_len+30 or cigar_len_S_l > clip_right_len+30:
+            print('test2')
             continue
+            
         
         # 根据cliped reads 的reads 找insertion，并记录到字典中，
         # 这一步应该记录到bed文件中，可以用bedtools来处理，进行insertion区域的合并
         # 相当于是用intersect 来取代merge insertion
-        cni =  check_novel_insertion(cigar, int(clip_te_len))
-        insertion_type =cni[0]
-        insertion_cigar = cni[1]
-        insertion_position = get_insertion_position_novel(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), insertion_cigar)
+        # cni =  check_novel_insertion(cigar, int(clip_te_len))
+        # insertion_type =cni[0]
+        # insertion_cigar = cni[1]
+        # insertion_position = get_insertion_position_novel(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), insertion_cigar)
+        insertion_position = get_insertion_position_novel(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), cigar)
 
         # if insertion_type == "novel":
         #     insertion_position = get_insertion_position_novel(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), insertion_cigar)
@@ -398,7 +437,11 @@ def Cluster_raeds(READS):
         # 一条reads断点两端的序列信息记录
         cilp_seq = reads_id + "|" + TE_strand + "|" + genome_strand + "|" + seq[int(clip_left_len) - 50 : int(clip_left_len)] + "|" + seq[int(clip_left_len):int(clip_left_len)+50] 
     
-        print(reads_id + "\t" + str(insertion_position[0]) +"\t" + str(insertion_position[1]) + "\t" + insertion_type)
+        # print(reads_id + "\t" + str(insertion_position[0]) +"\t" + str(insertion_position[1]) + "\t" + insertion_type)
+        if insertion_position[1] - insertion_position[0] >= 20 : 
+            insertion_type = "germline"
+        else:
+            insertion_type = "novel"
         READS_CLUSTER[ref][TE].append([insertion_position[0], insertion_position[1], insertion_type, clip_te_len, cilp_seq])
 
     with open(outFile_pickle, "wb") as f1:
@@ -518,32 +561,36 @@ for ref in TE_INSERTION_CLUSTER:
 
             align_seq_file.close()
             # multi sequence alignment
-            align_sequences = {}
-            id = None
-            seq = ''
-            for line in open(mafft( RESULT_PATH + PREFIX + ".seq.temp.fq" ), 'r'):
-                if line.startswith('>'):
-                    if id != None:
-                        align_sequences[id] = seq.upper()
-                    id = line.strip().split('>')[1]
-                    seq = ''
-                else:
-                    seq = seq + line.strip()
-            align_sequences[id] = seq.upper()
-            align_seq = '\t|\t'.join(get_consensus_seq(align_sequences))
+            # get consensus sequences
+
+            # align_sequences = {}
+            # id = None
+            # seq = ''
+            # for line in open(mafft( RESULT_PATH + PREFIX + ".seq.temp.fq" ), 'r'):
+            #     if line.startswith('>'):
+            #         if id != None:
+            #             align_sequences[id] = seq.upper()
+            #         id = line.strip().split('>')[1]
+            #         seq = ''
+            #     else:
+            #         seq = seq + line.strip()
+            # align_sequences[id] = seq.upper()
+            # align_seq = '\t|\t'.join(get_consensus_seq(align_sequences))
+            align_seq = ""
             
             # 标记检测，测试用的
             if len(Counter(insertion_strand).items()) == 1 and list(Counter(insertion_strand).items())[0][1] != 1 :
                 insertion_strand.append('CAO')
             elif len(Counter(insertion_strand).items()) == 2:
                 insertion_strand.append('GAN')
+                
             
             strand_info = ['_'.join(insertion_strand_te), '_'.join(insertion_strand_genome), '_'.join(insertion_strand)] 
             # outfile.write(str(ref)+'\t'+str(insertion[0])+'\t'+str(insertion[1])+'\t'+te+'\t'+'|'.join(strand_info)+'\t'+ str(insertion[2])+'\t'+str(insertion[3]-insertion[2])+'\t'+str(float(insertion[2])/insertion[3])+'\t'+insertion[4]+'\t'+str(insertion[5]) + '\t' + align_seq + '\t'+'_'.join(READS_SEQ)+'\n')    
             insertion_final = [str(ref), str(insertion[0]), str(insertion[1]), te, '|'.join(strand_info), str(insertion[2]), str(insertion[3]-insertion[2]), str(float(insertion[2])/insertion[3]), insertion[4], str(insertion[5]), align_seq, '_'.join(READS_SEQ)]
-            outfile.write('\t'.join(insertion_final) + '\n')    
+            outfile.write('\t'.join(insertion_final) + '\n')
 
-        
+
 outfile.close()        
 print('>_< DONE >V<')
 endtime = datetime.datetime.now()

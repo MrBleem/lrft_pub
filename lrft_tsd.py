@@ -46,34 +46,40 @@ def get_candinate_tsd_with_seq(tsd):
                     tsd_tmp_score = tsd_tmp_score + 2
                 else:
                     gap_flag = gap_flag + 1 
-                    if gap_flag < 2:
+                    
+                    if gap_flag <= 3:
+                        if len(tsd_tmp) >= 4:
+                            if len( re.findall('T{4,}', tsd_tmp) ) or len( re.findall('A{4,}', tsd_tmp) )>= 1 :
+                                candinate_tsd.append([i, tsd_tmp, tsd_tmp_score-10])
+                            else:
+                                candinate_tsd.append([i, tsd_tmp, tsd_tmp_score])
+                        
                         tsd_tmp = tsd_tmp + tsd[j]
-                        tsd_tmp_score = tsd_tmp_score + 0
+                        tsd_tmp_score = tsd_tmp_score - 4
                     else:
                         break
-            candinate_tsd.append([i, tsd_tmp, tsd_tmp_score])
+            # if len( re.findall('A{4,}', tsd_tmp) ) >= 1 :
+            #     tsd_tmp_score = tsd_tmp_score - 10
+
+            # if [i, tsd_tmp, tsd_tmp_score] not in candinate_tsd:
+            #     candinate_tsd.append([i, tsd_tmp, tsd_tmp_score])
     
     if len(candinate_tsd) <= 0:
         return ['NA', 'NA', 'NA']
-    TSD = sorted( candinate_tsd, key = itemgetter(2) )[-1]
+    TSD_sorted = sorted( candinate_tsd, key = itemgetter(2), reverse=1 )
+    print(TSD_sorted)
+    TSD = TSD_sorted[0]
+    # print(TSD_sorted)
 
-    # 如果得到的结果重复性很好，就换成分数排第二的
-    # for k in sorted( candinate_tsd, key = itemgetter(2), reverse=T ):
-    #     if sorted( Counter(k[1]).items(), key=itemgetter(1) )[-1][1] <  len(k[1])/2 :
-    #         if len(k[1]) < 5:
-    #             k = 'NA'
-    #         print(k)
-    #         return k
-    #     else:
-    #         continue
+    # if len(t) >= 1:
+    #     print('1')
+    #     if TSD[1][0:len(t[0])] == t[0]:
+    #         TSD[1] = TSD[1][len(t[0])-3: ]
+    #         print('2')
 
-    t = re.findall('A{3,}', TSD[1])
-    if len(t) >= 1:
-        if TSD[1][0:len(t[0])] :
-            TSD[1] = TSD[1][len(t[0])-3: ]
-
-        elif TSD[1][-len(t[0]):]:
-            TSD[1] = TSD[1][: len(TSD[1])-len(t[0])+3 ]
+    #     elif TSD[1][-len(t[0]):] == t[0] :
+    #         TSD[1] = TSD[1][: len(TSD[1])-len(t[0])+3 ]
+    #         print('3')
 
     return TSD
 
@@ -91,7 +97,7 @@ def get_tsd_in_genome(tsd_seq, tsd_genome):
     # 把得到的candidate tsd与genome的序列进行比较，看tsd在genome上的位置
     TSD_with_seq = get_candinate_tsd_with_seq(tsd_seq)
     print(TSD_with_seq)
-    # TSD_with_seq = [20,'AAATAACG']
+    # TSD_with_seq = [20,'CAGAC-CG-TATTT']
     print(tsd_genome)
     candinate_tsd_with_genome = []
     for i in range(len(tsd_genome)):

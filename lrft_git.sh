@@ -4,7 +4,7 @@ git config --global user.email "1194189468@qq.com"
 git config --global user.name "MrBleem"
 
 # echo "# lrft" >> README.md
-version="v1.0.2"
+version="v1.0.3"
 
 git init
 git add .

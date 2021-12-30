@@ -95,7 +95,7 @@ bamfile = pysam.AlignmentFile( DATA_PATH + BAMFILE, "rb" )
 # else:
 # READS = bamfile
 
-# READS = bamfile.fetch( "1" )
+READS = bamfile.fetch( "1" )
 # region="2:40,613,659-40,613,752"
 # region = "1:23,981,124-23,981,132" # AACAGATGGGGCATC
 # region = '1:77,764,983-77,764,992'
@@ -103,12 +103,12 @@ bamfile = pysam.AlignmentFile( DATA_PATH + BAMFILE, "rb" )
 # region = '1:234,805,709-234,805,732' # TGATTATATGTTTT
 # region = '1:246,592,328-246,592,345' # AGTCTCACTTT
 # region = '10:9,474,847-9,474,855' # TTTTT
-region = '10:26,852,961-26,852,978' # AAATAAAAAGAAAA
+# region = '10:26,852,961-26,852,978' # AAATAAAAAGAAAA
 
-chr=region.split(':')[0]
-region_start=region.split(':')[1].split('-')[0].replace(',', '')
-region_end=region.split(':')[1].split('-')[1].replace(',', '')
-READS = bamfile.fetch( chr, int(region_start) , int(region_end))
+# chr=region.split(':')[0]
+# region_start=region.split(':')[1].split('-')[0].replace(',', '')
+# region_end=region.split(':')[1].split('-')[1].replace(',', '')
+# READS = bamfile.fetch( chr, int(region_start) , int(region_end))
 
 outFile = RESULT_PATH + PREFIX + ".lrft.table.txt"
 outfile = open(outFile, 'w')

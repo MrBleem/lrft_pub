@@ -2,7 +2,17 @@
 import re
 
 
+
+
 # 修正：需要添加clip left和insertion cigar之间的距离有多长
+# query_position 包含里几个特定位置，用以确定具体比对情况
+#       ----------------       isnertion     ------------      reference genome
+#       ----------------_____insertion seq___------------      map to TE to extract TE 
+#       ----------------_____             ___------------      map to genome after clip
+#                      |     |           |   |                 query_position
+#                   ----_____             ___-----             alignment to find TSD
+#                    ---                  ___                  TSD
+
 
 # 通过结果来看，这个地方好像是更针对于结构比较清晰的 insertion
 def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len, clip_right_len, cigar):
@@ -33,6 +43,8 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
         insertion_position_to_clip_right = cigar_len_S - clip_left_len
         
         query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len + clip_te_len, clip_left_len + clip_te_len + insertion_position_to_clip_right ]
+        # print('ck0')
+        # print(query_position)
         re_type = "germline"
         i=1
     else:
@@ -66,13 +78,20 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
                         insertion_position_to_clip_left = clip_left_len - cigar_len_ex_D
                         insertion_position_to_clip_right = clip_te_len + insertion_position_to_clip_left - int(s[:-1])
 
+                        # print(insertion_position_to_clip_right)
+
                         # insertion_position_to_clip_right = cigar_len_ex_D + int(s[:-1]) - ( insertion_position_to_clip_left + clip_te_len )
 
                         if insertion_position_to_clip_right > 0:
                             # query_position = [cigar_len_ex_D, clip_left_len, cigar_len_ex_D + int(s[:-1]), cigar_len_ex_D + int(s[:-1]) + insertion_position_to_clip_right ]
-                            query_position = [ cigar_len_ex_D, clip_left_len, cigar_len_ex_D + int(s[:-1]), cigar_len_ex_D + int(s[:-1]) ]
+                            # query_position = [ cigar_len_ex_D, clip_left_len, cigar_len_ex_D + int(s[:-1]), cigar_len_ex_D + int(s[:-1]) ]                            
+                            query_position = [ cigar_len_ex_D, clip_left_len, clip_left_len, clip_left_len ]
+                            # print('ck1')
+                            # print(query_position)
                         else:
-                            query_position = [ cigar_len_ex_D, clip_left_len, clip_left_len + clip_te_len , cigar_len_ex_D + int(s[:-1]) ]
+                            query_position = [ cigar_len_ex_D, clip_left_len, clip_left_len , clip_left_len - insertion_position_to_clip_right ]
+                            # print('ck2')
+                            # print(query_position)
 
                         break
                 if i < s_cigar_len - 1:
@@ -87,6 +106,8 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
 
                         query_position = cigar_len_ex_D
                         query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len + clip_te_len, clip_left_len + clip_te_len + insertion_position_to_clip_right ]
+                        # print('ck3')
+                        # print(query_position)
 
                         re_type="germline"
                         break
@@ -101,30 +122,34 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
                     insertion_position_to_clip_left = 0
                     insertion_position_to_clip_right = 0
 
-                    query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len + clip_te_len, clip_left_len + clip_te_len + insertion_position_to_clip_right ]
+                    query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len , clip_left_len + insertion_position_to_clip_right ]
+                    
+                    # print('ck4')
+                    # print(query_position)
                     # deletion在clip位置后面的情况
                     # 在insertion位置两边延伸一个大概TSD的长度
                     # 
-                    for j in range(5):
+                    for j in range(14):
                         if i+j+1 < s_cigar_len-1:
                             s_next = s_cigar[i+j+1]
-                            print(s_next)
+                            # print(s_next)
                             cigar_len = cigar_len + int(s_next[:-1])
                             cigar_len_dic[s_next[-1]] = cigar_len_dic[s_next[-1]] + int(s_next[:-1])
                             cigar_len_ex_D = cigar_len_dic['S'] + cigar_len_dic['M'] + cigar_len_dic['I']
-                            print( cigar_len_ex_D, clip_left_len )
+                            # print( cigar_len_ex_D, clip_left_len )
 
-                            if abs(cigar_len_ex_D - clip_left_len) <= 20 and  s_next[-1] == 'D' : 
-                                print('ck')
+                            if abs(cigar_len_ex_D - clip_left_len) <= 40 and  s_next[-1] == 'D'  and int(s_next[:-1]) >= 50: 
+                                # print('ck')
                                 # insertion_position_start = genome_map_position_start + ( clip_left_len - cigar_len_dic['S'] + cigar_len_dic['D'] - cigar_len_dic['I'] ) -1
                                 insertion_position_end = genome_map_position_start + ( cigar_len_dic['D'] +  cigar_len_dic['M'] ) -1
-                                insertion_position_start = insertion_position_end - int(s_next[:-1])
+                                # insertion_position_start = insertion_position_end - int(s_next[:-1])
                                 
                                 insertion_position_to_clip_left = 0
                                 insertion_position_to_clip_right = cigar_len_ex_D - clip_left_len
 
-                                query_position = [ clip_left_len - insertion_position_to_clip_left, clip_left_len + clip_te_len , clip_left_len + clip_te_len, clip_left_len + clip_te_len + insertion_position_to_clip_right ]
-                                
+                                query_position = [ clip_left_len - insertion_position_to_clip_left, clip_left_len  , clip_left_len , clip_left_len  + insertion_position_to_clip_right ]
+                                # print('ck5')
+                                # print(query_position)
                                 break
                     # if i < s_cigar_len-1:
                     #     s_next = s_cigar[i+1]
@@ -141,10 +166,10 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
 
                     insertion_position_to_clip_left = clip_left_len - ( cigar_len_ex_D - int(s[:-1]) ) 
                     insertion_position_to_clip_right = int(s[:-1]) - insertion_position_to_clip_left
-                    
-                    
-                    query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len + clip_te_len, clip_left_len + clip_te_len + insertion_position_to_clip_right ]
-
+                                       
+                    query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len , clip_left_len + insertion_position_to_clip_right ]
+                    # print('ck6')
+                    # print(query_position)
                 # elif s[-1] == 'D':
                 # 不存在D的情况，因为碱基的累积不会停在缺失的地方
                     
@@ -157,7 +182,9 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
                         insertion_position_to_clip_left =  clip_left_len - ( cigar_len_ex_D - int(s[:-1]) ) 
                         insertion_position_to_clip_right = 0
                         
-                        query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len + clip_te_len, clip_left_len + clip_te_len + insertion_position_to_clip_right ]
+                        query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len , clip_left_len  + insertion_position_to_clip_right ]
+                        # print('ck7')
+                        # print(query_position)
                 break
                 
     # return [insertion_position_start, insertion_position_end, ''.join(s_cigar[i-1:i+2]), query_position, re_type]

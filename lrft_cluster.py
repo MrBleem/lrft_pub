@@ -1,5 +1,6 @@
 
 
+
 import os
 import re
 import sys
@@ -9,9 +10,13 @@ from operator import itemgetter, attrgetter
 from collections import Counter
 
 from lrft_get_insertion_position import get_insertion_position
+from lrft_consensus_tsd import consensus_tsd
 
-def Cluster_raeds(READS, outFile_pickle):
+
+
+def Cluster_raeds(READS, READS_SEQUENCE, outFile_pickle, genome_fa):
     READS_CLUSTER={}
+    genome_fa_seq = pysam.Fastafile(genome_fa)
     for read in READS:
         
         # print(re.findall('[0-9]*[A-Z]',read.cigarstring)[0])
@@ -21,11 +26,11 @@ def Cluster_raeds(READS, outFile_pickle):
         # eg. SRR11669560.sra.9661265.ALU:ALU1.1.2831.245.9196
         # eg. SRR11669560.sra.12503931.ALU:ALU1.+.11.6487.269.2381
         if  read.is_supplementary:
-            print(read.qname + ":type:supplementary")
+            # print(read.qname + ":type:supplementary")
             continue
         
         if read.is_secondary:    # 竟然还留着这个，简直是智障 or read.flag==0: 
-            print(read.qname + ":type:secondary")
+            # print(read.qname + ":type:secondary")
             if read.seq == None or read.cigar == None:
                 continue  
         name = read.qname.split(',') # reads name的分隔符
@@ -50,7 +55,7 @@ def Cluster_raeds(READS, outFile_pickle):
         TE_strand = name[2]
         
         # 判断reads比对的方向，方向会影响前一步cilp的左右方向
-        flag=hex(read.flag)
+        flag = hex(read.flag)
         flag_strand = int(flag[2:])%100
         if flag_strand != 10 :
             genome_strand = '+'
@@ -74,10 +79,10 @@ def Cluster_raeds(READS, outFile_pickle):
         
         
 
-        if cigar_len_S_f > clip_left_len or cigar_len_S_l > clip_right_len:
-            print(read.qname + ":type:clipped")
-        else:
-            print(read.qname + ":type:perfect")
+        # if cigar_len_S_f > clip_left_len or cigar_len_S_l > clip_right_len:
+        #     print(read.qname + ":type:clipped")
+        # else:
+        #     print(read.qname + ":type:perfect")
         
         if cigar_len_S_f > clip_left_len+30 or cigar_len_S_l > clip_right_len+30:
             continue
@@ -90,21 +95,63 @@ def Cluster_raeds(READS, outFile_pickle):
         # insertion_position = get_insertion_position(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), insertion_cigar)
         insertion_position = get_insertion_position(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), cigar)
 
+        print('\n>>>')
+        print(reads_id)
+        print(insertion_position[0], insertion_position[1])
+        print('>>>\n')
         if TE not in READS_CLUSTER[ref]:
             READS_CLUSTER[ref][TE]=[]
             
         # 一条reads断点两端的序列信息记录
+        # 通过断点周围的信息，
         query_position = insertion_position[3]
+        cilp_te = READS_SEQUENCE[reads_id]   # clipped TE sequence
+
+        # ref_seq = read.get_reference_sequence( int(insertion_position[0]) - 10, int(insertion_position[1]) + 10 )
+        ref_seq = genome_fa_seq.fetch(ref,int(insertion_position[0])-15 , int(insertion_position[1])+14 )
+        
+        if int(insertion_position[1]) - int(insertion_position[0]) <= 15:
+            candinate_TSD_genome = ref_seq
+        else:
+            candinate_TSD_genome = "".join([ref_seq[0:20], ref_seq[-20:]])
+        
+        # print('candinate_TSD_genome')
+        # print(candinate_TSD_genome)
+
+        candinate_TSD_left = seq[ int(query_position[0]) - 15 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[0]) + 15 ]
+        candinate_TSD_right = seq[ int(query_position[3]) - 15 : int(query_position[3]) ] + seq[ int(query_position[3]) : int(query_position[3] + 15) ]
+
+
         # cilp_seq = reads_id + "|" + TE_strand + "|" + genome_strand + "|" + seq[int(clip_left_len) - 50 : int(clip_left_len)] + "|" + seq[int(clip_left_len):int(clip_left_len)+50] 
-        cilp_seq = reads_id + "|" + \
-                    TE_strand + "|" + \
+        cilp_seq =  reads_id  + "|" + \
+                    TE_strand  + "|" + \
                     genome_strand + "|" + \
                     seq[ int(query_position[0]) - 50 : int(query_position[0]) ] + "|" + \
                     seq[ int(query_position[0]) : int(query_position[1]) ]  + "|" + \
+                    cilp_te   + "|" + \
                     seq[ int(query_position[2]) : int(query_position[3]) ]  + "|" + \
-                    seq[ int(query_position[3]) : int(query_position[3] + 50) ]
+                    seq[ int(query_position[3]) : int(query_position[3] + 50) ] + "|" + \
+                    candinate_TSD_left + "|" + \
+                    candinate_TSD_right + "|" + \
+                    candinate_TSD_genome
                     # seq[ int(query_position[1]) : int(query_position[2]) ]  + "|" + \
-    
+
+        # align_seq_file = open('tsd.tmp.fa', 'w')
+        # align_seq_file.write('>left\n')
+        # align_seq_file.write(candinate_TSD_left+'\n')
+        # align_seq_file.write('>right\n')
+        # align_seq_file.write(candinate_TSD_right+'\n')
+        # align_seq_file.write('>genome\n')
+        # align_seq_file.write(candinate_TSD_genome)
+        # align_seq_file.close()
+
+        # fre_cuoff = 0.8
+        # TSD = consensus_tsd('tsd.tmp.fa', fre_cuoff)
+        # print(candinate_TSD_left)
+        # print(candinate_TSD_right)
+        # print(candinate_TSD_genome)
+        # print(TSD)
+
         # print(reads_id + "\t" + str(insertion_position[0]) +"\t" + str(insertion_position[1]) + "\t" + insertion_type)
         if insertion_position[1] - insertion_position[0] >= 20 : 
             insertion_type = "germline"

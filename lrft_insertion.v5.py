@@ -25,8 +25,10 @@ import pysam
 from operator import itemgetter, attrgetter
 from collections import Counter
 
+from lrft_tsd import get_tsd_in_genome
 
 from lrft_consensus import consensus_seq
+from lrft_consensus_tsd import consensus_tsd
 # from lrft_get_insertion_position import get_insertion_position
 from lrft_cluster import Cluster_raeds
 
@@ -70,6 +72,7 @@ from lrft_cluster import Cluster_raeds
 #             PREFIX = arg
 
 
+
 # 这个版本只用一种insertion的方法， max_deletion的方方法暂时不用
 # 因为想在大部分物种中使用，主要依靠一种思想比较靠谱
 
@@ -92,12 +95,15 @@ bamfile = pysam.AlignmentFile( DATA_PATH + BAMFILE, "rb" )
 # else:
 # READS = bamfile
 
-# READS = bamfile.fetch( "1" )
-region="1:5,701,523-5,701,537"
-chr=region.split(':')[0]
-region_start=region.split(':')[1].split('-')[0].replace(',', '')
-region_end=region.split(':')[1].split('-')[1].replace(',', '')
-READS = bamfile.fetch( chr, int(region_start) , int(region_end))
+READS = bamfile.fetch( "1" )
+# region="2:40,613,659-40,613,752"
+# region = "1:23,981,124-23,981,132"
+# region = '1:77,764,983-77,764,992'
+# region = '1:112,991,995-112,992,009'
+# chr=region.split(':')[0]
+# region_start=region.split(':')[1].split('-')[0].replace(',', '')
+# region_end=region.split(':')[1].split('-')[1].replace(',', '')
+# READS = bamfile.fetch( chr, int(region_start) , int(region_end))
 
 outFile = RESULT_PATH + PREFIX + ".lrft.table.txt"
 outfile = open(outFile, 'w')
@@ -107,6 +113,8 @@ outfile.write('chr\tinsertion_start\tinsertion_end\tTE\tstrand\tsurpporting_read
 outFile_pickle = RESULT_PATH + PREFIX + ".lrft.cluster.pkl"
 SEQ_INFO_FILE = DATA_PATH + PREFIX.split('.')[0] + ".clip.reads.pkl"
 
+genome_fa = "/data/tusers/boxu/annotation/hs37d5/hs37d5.fa"
+genome_fa_seq = pysam.Fastafile(genome_fa)
 
 # if os.path.exists(outFile_pickle):
 #     print('?')
@@ -129,10 +137,16 @@ def comp_reverse(seq):
 
 
 # 合并两个insertion区间，取并集
+# 取并集的时候还是需要看一下方向的问题
 def merge_insertion(insertion1, insertion2):
+    # merge insertion应该只去merge方向相同的，所以方向判断应该在前一步
+
     # --------      insertion1
     #    --------   insertion2
     # -----------   merged_insertion
+    # ++++++++
+    #    ++++++++
+    # 
     new_insertion_s = insertion1[0]
     new_insertion_e = insertion1[1]
     # if insertion2[0] < new_insertion_s:
@@ -143,7 +157,7 @@ def merge_insertion(insertion1, insertion2):
     return [new_insertion_s, new_insertion_e, insertion1[2]+";"+insertion2[2], sum([insertion1[3],insertion2[3]])/2,  insertion1[4]+";"+insertion2[4] ]
 
 
-def record_insertion(ref, te, insertion):
+def record_insertion(ref, te, insertion, test_index):
     # 将insertion记录到文件中
     # 这一步包括：
     #       · 判断insertion的方向 
@@ -156,23 +170,38 @@ def record_insertion(ref, te, insertion):
     insertion_strand = []
     insertion_strand_te = []
     insertion_strand_genome = []
-    align_seq_file = open( RESULT_PATH + PREFIX +".seq.temp.fq", 'w' )
+    insertion_type = insertion[4]
+    
 
-    for read_seq in READS_SEQ_INFO.split(';'):                
+    # align_seq_file_name = RESULT_PATH + PREFIX + ".seq.temp." + str(test_index) + ".fq"
+    # align_tsd_file_name = RESULT_PATH + PREFIX +".tsd.temp." + str(test_index) + ".fq"
+
+    align_seq_file_name = RESULT_PATH + PREFIX + ".seq.temp.fq"
+    align_tsd_file_name = RESULT_PATH + PREFIX +".tsd.temp.fq"
+
+    align_seq_file = open( align_seq_file_name, 'w' )
+    align_tsd_file = open( align_tsd_file_name, 'w' )
+    ref_seq = genome_fa_seq.fetch(ref, int(insertion[0])-20 , int(insertion[1])+19 )
+    if int(insertion[1]) - int(insertion[0]) <= 20:
+        tsd_genome = ref_seq
+        print(tsd_genome)
+        print(insertion[0], insertion[1])
+    else:
+        tsd_genome = "".join([ref_seq[0:20], ref_seq[-20:]])
+
+    for read_seq in READS_SEQ_INFO.split(';'):           
         read_seq_info = read_seq.split('|')
                 
         read_id = read_seq_info[0]
         te_strand = read_seq_info[1]
         genome_strand = read_seq_info[2]
 
-        clip_left = read_seq_info[3]
-        clip_right = read_seq_info[4]
-
         insertion_sequence = read_seq_info[3:]
 
         insertion_strand_te.append(te_strand)
         insertion_strand_genome.append(genome_strand)
-                
+
+
         # bed中记录的TE方向都是正的，正负代表与序列的相对方向
         # insertion的方向完全取决于clip reads 比对到genome上的方向
         # 要提取的reads也是只跟比对到genome上的情况对应，与第一步的方向没有关系
@@ -187,39 +216,116 @@ def record_insertion(ref, te, insertion):
         # clip reads map to genome
         # <<<<<<T<<<<<<<<？<<<<               <<<<｜<<<<<<<<<<<<<<<< seq3     
         # >>>>>>>>>>>>>>>｜>>>>               >>>>｜>>>>>A>>>>>>>>>>
-
-        cilp_mid = READS_SEQUENCE[read_id]
-        if genome_strand == "+" :
+        
+        # 以reference 正向为导向
+        if genome_strand == "+":
             insertion_strand.append("+")
-            # READS_SEQ.append(read_id + "|" + "\033[34m" + clip_left + "\033[0m" + cilp_mid + "\033[34m" + clip_right + "\033[0m")
-            READS_SEQ.append(read_id + "|" + \
-                            insertion_sequence[0] + \
-                            "\033[33m" + insertion_sequence[1] + "\033[0m" + \
-                            "\033[34m" + cilp_mid + "\033[0m" + \
-                            "\033[33m" + insertion_sequence[3] + "\033[0m" + \
-                            insertion_sequence[4] )
-
-            align_seq_file.write( '>' + read_id + '\n' )
-            # align_seq_file.write( clip_left + cilp_mid + clip_right + '\n' )
-            align_seq_file.write( "".join(insertion_sequence) + '\n' )
-        else :
+        else:
             insertion_strand.append("-")
-            # READS_SEQ.append( read_id + "|" + "\033[34m" + comp_reverse(clip_right) + "\033[0m" + cilp_mid + "\033[34m" + comp_reverse(clip_left) + "\033[0m" )
-            READS_SEQ.append(read_id + "|" + \
-                            comp_reverse(insertion_sequence[4]) + \
-                            "\033[33m" + comp_reverse(insertion_sequence[3]) + "\033[0m" + \
-                            "\033[34m" + cilp_mid  + "\033[0m" + \
-                            "\033[33m" + comp_reverse(insertion_sequence[1]) + "\033[0m" + \
-                            comp_reverse(insertion_sequence[0]) )
+            insertion_sequence[2] = comp_reverse(insertion_sequence[2])
+        
+        READS_SEQ.append(read_id + "|" + \
+                        insertion_sequence[0] + \
+                        "\033[33m" + insertion_sequence[1] + "\033[0m" + \
+                        "\033[34m" + insertion_sequence[2] + "\033[0m" + \
+                        "\033[33m" + insertion_sequence[3] + "\033[0m" + \
+                        insertion_sequence[4] )
 
-            align_seq_file.write( '>' + read_id + '\n' )
-            # align_seq_file.write( comp_reverse(clip_right) + cilp_mid + comp_reverse(clip_left) + '\n' )
-            align_seq_file.write( comp_reverse( "".join(insertion_sequence)) + '\n' )
+        # tsd
+        align_tsd_file.write( '>' + read_id + ".left" + '\n' )
+        align_tsd_file.write( insertion_sequence[5] + '\n' )
+        align_tsd_file.write( '>' + read_id + ".right" + '\n' )
+        align_tsd_file.write( insertion_sequence[6] + '\n' )
 
+        # consensus seq
+        align_seq_file.write( '>' + read_id + '\n' )
+        # align_seq_file.write( clip_left + cilp_mid + clip_right + '\n' )
+        align_seq_file.write( "".join(insertion_sequence[0:4]) + '\n' )
+
+
+        # 以TE正向为导向
+        # if genome_strand == "+" :
+        #     insertion_strand.append("+")
+        #     # READS_SEQ.append(read_id + "|" + "\033[34m" + clip_left + "\033[0m" + cilp_mid + "\033[34m" + clip_right + "\033[0m")
+        #     READS_SEQ.append(read_id + "|" + \
+        #                     insertion_sequence[0] + \
+        #                     "\033[33m" + insertion_sequence[1] + "\033[0m" + \
+        #                     "\033[34m" + insertion_sequence[2] + "\033[0m" + \
+        #                     "\033[33m" + insertion_sequence[3] + "\033[0m" + \
+        #                     insertion_sequence[4] )
+
+        #     # tsd
+        #     align_tsd_file.write( '>' + read_id + ".left" + '\n' )
+        #     align_tsd_file.write( insertion_sequence[5] + '\n' )
+        #     align_tsd_file.write( '>' + read_id + ".right" + '\n' )
+        #     align_tsd_file.write( insertion_sequence[6] + '\n' )
+
+        #     # consensus seq
+        #     align_seq_file.write( '>' + read_id + '\n' )
+        #     # align_seq_file.write( clip_left + cilp_mid + clip_right + '\n' )
+        #     align_seq_file.write( "".join(insertion_sequence[0:4]) + '\n' )
+
+
+        # else :
+        #     insertion_strand.append("-")
+        #     # READS_SEQ.append( read_id + "|" + "\033[34m" + comp_reverse(clip_right) + "\033[0m" + cilp_mid + "\033[34m" + comp_reverse(clip_left) + "\033[0m" )
+        #     READS_SEQ.append(read_id + "|" + \
+        #                     comp_reverse(insertion_sequence[4]) + \
+        #                     "\033[33m" + comp_reverse(insertion_sequence[3]) + "\033[0m" + \
+        #                     "\033[34m" + insertion_sequence[2]  + "\033[0m" + \
+        #                     "\033[33m" + comp_reverse(insertion_sequence[1]) + "\033[0m" + \
+        #                     comp_reverse(insertion_sequence[0]) )
+
+        #     # tsd
+        #     align_tsd_file.write( '>' + read_id + ".left" + '\n' )
+        #     align_tsd_file.write( comp_reverse(insertion_sequence[6]) + '\n' )
+        #     align_tsd_file.write( '>' + read_id + ".right" + '\n' )
+        #     align_tsd_file.write( comp_reverse(insertion_sequence[5]) + '\n' )
+
+        #     # print('-')
+
+        #     # consensus seq
+        #     align_seq_file.write( '>' + read_id + '\n' )
+        #     # align_seq_file.write( comp_reverse(clip_right) + cilp_mid + comp_reverse(clip_left) + '\n' )
+        #     align_seq_file.write( comp_reverse(insertion_sequence[4]) + comp_reverse(insertion_sequence[3]) + insertion_sequence[2] + comp_reverse(insertion_sequence[1]) + comp_reverse(insertion_sequence[0]) + '\n' )
+
+    
     align_seq_file.close()
-    # fre_cuoff = 0.8
-    # align_seq = consensus_seq(RESULT_PATH + PREFIX + ".seq.temp.fq", fre_cuoff)
-    align_seq = ''
+    align_tsd_file.close()
+    fre_cutoff = 0.75
+    if insertion[1] - [0] >= 50 : 
+        insertion_type = "germline"
+        tsd_seq = "NA"
+    else:
+        insertion_type = "novel"
+        tsd_seq  = consensus_tsd(align_tsd_file_name, fre_cutoff)
+
+    print(tsd_seq)
+    
+    if tsd_seq == 'NA':
+        tsd_in_genome = ['NA','NA', 'NA']
+    else:
+        tsd_in_genome = get_tsd_in_genome(tsd_seq, tsd_genome)
+        # if insertion_strand[0] == '+':
+        #     tsd_in_genome = get_tsd_in_genome(tsd_seq, tsd_genome)
+        # else:
+        #     tsd_genome = comp_reverse(tsd_genome)
+        #     tsd_in_genome = get_tsd_in_genome(tsd_seq, tsd_genome)
+        # print(len(tsd_genome))
+        # print(int(insertion[0])-15 , int(insertion[1])+14)
+        # print(tsd_genome)
+        print(tsd_in_genome)
+        # print(len(tsd_in_genome[1]))
+
+        insertion[0] = int(insertion[0])-20 + int(tsd_in_genome[0])
+        insertion[1] = insertion[0] + len(tsd_in_genome[1]) -1 
+
+
+    # align_reads = consensus_seq(align_seq_file_name, fre_cutoff)
+    align_reads = ''
+    align_seq = align_reads + "<<<< >>>>" + tsd_in_genome[1]
+
+    
             
     # 标记检测，测试用的
     if len(Counter(insertion_strand).items()) == 1 and list(Counter(insertion_strand).items())[0][1] != 1 :
@@ -230,9 +336,14 @@ def record_insertion(ref, te, insertion):
 
     strand_info = ['_'.join(insertion_strand_te), '_'.join(insertion_strand_genome), '_'.join(insertion_strand)] 
     # outfile.write(str(ref)+'\t'+str(insertion[0])+'\t'+str(insertion[1])+'\t'+te+'\t'+'|'.join(strand_info)+'\t'+ str(insertion[2])+'\t'+str(insertion[3]-insertion[2])+'\t'+str(float(insertion[2])/insertion[3])+'\t'+insertion[4]+'\t'+str(insertion[5]) + '\t' + align_seq + '\t'+'_'.join(READS_SEQ)+'\n')    
-    insertion_final = [str(ref), str(insertion[0]), str(insertion[1]), te, '|'.join(strand_info), str(insertion[2]), str(insertion[3]-insertion[2]), str(float(insertion[2])/insertion[3]), insertion[4], str(insertion[5]), align_seq, '_'.join(READS_SEQ)]
+    insertion_final = [str(ref), str(insertion[0]), str(insertion[1]), te, '|'.join(strand_info), str(insertion[2]), str(insertion[3]-insertion[2]), str(float(insertion[2])/insertion[3]), insertion_type, str(insertion[5]), "\033[31m" + tsd_in_genome[1] + "\033[0m", align_seq, '_'.join(READS_SEQ)]
+    # print(str(insertion[0])+"\t"+str(insertion[1])+"\t"+align_seq)
+    
+    
     outfile.write('\t'.join(insertion_final) + '\n')
 
+with open(SEQ_INFO_FILE, "rb") as f3:
+    READS_SEQUENCE = pickle.load(f3)
 
 # 加载前一步的文件
 if os.path.exists(outFile_pickle):
@@ -240,10 +351,9 @@ if os.path.exists(outFile_pickle):
         READS_CLUSTER = pickle.load(f2)
     print('get reads cluster from pkl file')
 else:
-    READS_CLUSTER = Cluster_raeds(READS, outFile_pickle)
+    READS_CLUSTER = Cluster_raeds(READS, READS_SEQUENCE, outFile_pickle, genome_fa)
 
-with open(SEQ_INFO_FILE, "rb") as f3:
-    READS_SEQUENCE = pickle.load(f3)
+
 
 
 # 遍历insertion，把临近的insertion merge到一起，这时候还没有考虑不同方向，不同类型的insertion
@@ -274,25 +384,28 @@ for ref in READS_CLUSTER:
             # if sum(insertion[0:2])/2 > insertion_pre[0] and sum(insertion[0:2])/2 < insertion_pre[1]:
             # insertion_pre[1] = insertion_pre[1] + 20    # 加入序列信息之后需要去掉 flag=delete
 
-            if insertion[0] >= insertion_pre[0] and insertion[0] <= insertion_pre[1]+20:
-                insertion_pre = merge_insertion(insertion_pre, insertion)
+            if insertion[0] >= insertion_pre[0] and insertion[0] <= insertion_pre[1]+20 and insertion[2] == insertion_pre[2]:
+                insertion_pre = merge_insertion(insertion_pre, insertion) 
                 supporting_reads = supporting_reads + 1
             else:
                 #   mapped_reads是根据insertion的位置，再用pysam计算insertion的位置上有多少条reads比对到了这个位置
                 mapped_reads = bamfile.count(contig=ref, start=insertion_pre[0], stop=insertion_pre[1]+500)
                 # insertion_start, insertion_end, insertion_type, clip_te_len, cilp_seq
                 insertion_record = [insertion_pre[0], insertion_pre[1], supporting_reads, mapped_reads, insertion_pre[2], insertion_pre[3], insertion_pre[4] ]
-                record_insertion(ref, te, insertion_record)
+                record_insertion(ref, te, insertion_record, j)
                 insertion_pre = insertion
                 supporting_reads = 1
                 if j == len(TE_CLUSTER[te][1:]):
                     flag='end'
+                    
         if flag !='end' :
             mapped_reads = bamfile.count(contig=ref, start=insertion_pre[0], stop=insertion_pre[1]+500)
             insertion_record = [insertion_pre[0], insertion_pre[1], supporting_reads, mapped_reads, insertion_pre[2], insertion_pre[3], insertion_pre[4]]
-            record_insertion(ref, te, insertion_record)
+            record_insertion(ref, te, insertion_record, j)
 
-outfile.close()        
+outfile.close()
 print('>_< DONE >V<')
 endtime = datetime.datetime.now()
 print (endtime - starttime)
+rm_args = ['rm', outFile_pickle]
+subprocess.Popen(rm_args)

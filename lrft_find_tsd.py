@@ -1,42 +1,93 @@
 
+from operator import itemgetter
+from collections import Counter
+import pickle
+import re
 
-from lrft_consensus_tsd import consensus_seq
+score_matrix = {'-':-2, 'N':2 }
 
-# 获得的序列是break points(左右两个点)
-# 如果用consensus sequence的话，不太能将TSD放入到insertion position的修正当中
-# 因为不同的supporting reads TSD比对的情况都不相同，不好修正 
-# 所以需要逐个考虑
-
-
-# 目前选取clip位置左右500bp的reads
-# 想起来需要知道clip位置与break point之间差了几个bp
-# 因为在找clip left的长度的时候，cigar的延伸不一定刚好到clip left的长度
+# m1
+# 以15为窗口，遍历这个tsd，找到分数最高的那个
+# window_size = 15
 
 
-
-supporting_reads = { '9396933': 'ATGGCCTCACAAATCTTAACTCGCCACTTCAAGTTAAAACCATCAGAGATGGCTGGGCATGGTGCTCACACCTGTAATCCCAGCACTTTGGGAGGCCAAGGCGTGGCGGATCACGTAGGTCAGAGATCGCACCATCCTGGCTGGGTCACAGTGAAACCCTGTCTCTACTAAAATACAAAAAATTAGCTGGGCGTGGTGGCAGGTGCCTGTAGTCCCAGTAGCTACTCGGGAGGCTGAGGCAGGAGAATGGCGTGAACCCGGGAGGCAGACCTGGTGAGTGAGCCAAGATCACACCACTGCACTCCAGCCTGATGACAGAGCAAGACTCCGTCTCAAAAAAAAAAAAAAAAAAAAAACCATCAGAAGTTCCACTATTGTAAATTT'
-                    }
-ALU_seq = 'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACGAGGTCAGGAGATCGAGACCATCCTGGCTAACACGGTGAAACCCCGTCTCTACTAAAAATACAAAAAATTAGCCGGGCGTGGTGGCGGGCGCCTGTAGTCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATGGCGTGAACCCGGGAGGCGGAGCTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTC'
-mafft_tmp = open('./tmp.fa', 'w')
+# m2
+# 找到一个只有一个gap的字符串
+# 没有长度限制
 
 
+# tsd_seq = '---AAC-GATGGG----T---'
+# tsd_seq = 'A-A--ACA--AACAGATG--'
+# tsd_seq = '-------A--ACA--AACAGATG-GGGCATC--------'
 
-for read in supporting_reads:
-    read_seq = supporting_reads[read]
-    read_seq_left = read_seq[:50]
-    read_seq_right = read_seq[-50:]
-    mafft_tmp.write('>left\n')
-    mafft_tmp.write(read_seq_left+'\n')
-    # mafft_tmp.write(left_test + '\n')
-    mafft_tmp.write('>right\n')
-    mafft_tmp.write(read_seq_right)
-    # mafft_tmp.write(right_test)
-    mafft_tmp.close()
-    fre_cuoff = 1
+# tsd_seq = '-------A--ACA--AACAGATG-GGGCATC--------'
+# tsd_seq = '---AAC-GATGGG----T---'
+# tsd_genome = 'AAAAAACAAAAACAGATGGG'
+# tsd_genome = 'AAAAAACAAAAACAGATGGG'
 
-    substitude_tsd = consensus_seq('./tmp.fa', fre_cuoff)
-    print(substitude_tsd)
 
+
+def get_candinate_tsd_with_seq(tsd):
+    candinate_tsd = []
+    tsd_split = tsd.split('-')
+    for i in range(len(tsd.split('-'))):
+        if tsd_split[i] != '':
+            tsd_tmp = ''
+            tsd_tmp_score = 0
+            gap_flag = 0
+
+            start_index = len( '-'.join(tsd_split[0:i]) ) + 1
+            
+            for j in range(start_index, len(tsd)):
+                if tsd[j] != '-':
+                    tsd_tmp = tsd_tmp + tsd[j]
+                    tsd_tmp_score = tsd_tmp_score + 2
+                    if j == len(tsd) and len(tsd_tmp) >= 4:
+                        candinate_tsd.append([i, tsd_tmp, tsd_tmp_score])
+                else:
+                    gap_flag = gap_flag + 1 
+                    if gap_flag <= 3:
+                        if len(tsd_tmp) >= 4:
+                            if len( re.findall('T{4,}', tsd_tmp) ) or len( re.findall('A{4,}', tsd_tmp) )>= 1 :
+                                candinate_tsd.append([i, tsd_tmp, tsd_tmp_score-10])
+                            else:
+                                candinate_tsd.append([i, tsd_tmp, tsd_tmp_score])
+                        tsd_tmp = tsd_tmp + tsd[j]
+                        tsd_tmp_score = tsd_tmp_score - 4
+                    else:
+                        break
+    
+    if len(candinate_tsd) <= 0:
+        return ['NA', 'NA', 'NA']
+    TSD_sorted = sorted( candinate_tsd, key = itemgetter(2), reverse=1 )
+    print(TSD_sorted)
+    TSD = TSD_sorted[0]
+
+    return TSD
+
+
+def score_tsd_genome(seq1, seq2):
+    score = 0
+    for i in range(len(seq1)):
+        if seq1[i] == seq2[i]:
+            score = score + 2
+        else:
+            score = score - 2
+    return score
+
+def get_tsd_in_genome(tsd_seq, tsd_genome):
+    # 把得到的candidate tsd与genome的序列进行比较，看tsd在genome上的位置
+    TSD_with_seq = get_candinate_tsd_with_seq(tsd_seq)
+    print(TSD_with_seq)
+    # TSD_with_seq = [20,'CAGAC-CG-TATTT']
+    print(tsd_genome)
+    candinate_tsd_with_genome = []
+    for i in range(len(tsd_genome)):
+        window_genome = tsd_genome[i:i+len(TSD_with_seq[1])]
+        candinate_tsd_with_genome.append([i, window_genome, score_tsd_genome(window_genome, TSD_with_seq[1])])
+    # print(sorted( candinate_tsd_with_genome, key = itemgetter(2) ))
+    tsd_in_genome = sorted( candinate_tsd_with_genome, key = itemgetter(2) )[-1]
+    return tsd_in_genome
 
 
 

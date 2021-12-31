@@ -108,6 +108,7 @@ do
 		echo "filter aligned reads"
 		# samtools view -bhSf 4 ${BAM} > ${PREFIX}.unmapped.bam # 提取未比对到参考序列上的比对结果
 		# 提取比对到参考序列上的比对结果
+		# 比对到 TE 上的结果可以稍微放宽一点
 		samtools view -bhSF 4 ${BAM} | samtools view -bhSq 60 > ${PREFIX}.mapped.TE.bam
 		
 		samtools sort -@ ${CPU} -o ${PREFIX}.mapped.sorted.TE.bam ${PREFIX}.mapped.TE.bam

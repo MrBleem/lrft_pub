@@ -25,9 +25,8 @@ import pysam
 from operator import itemgetter, attrgetter
 from collections import Counter
 
-from lrft_tsd import get_tsd_in_genome
-
-from lrft_consensus import consensus_seq
+from lrft_find_tsd import get_tsd_in_genome
+from lrft_consensus_seq import consensus_seq
 from lrft_consensus_tsd import consensus_tsd
 # from lrft_get_insertion_position import get_insertion_position
 from lrft_cluster import Cluster_raeds

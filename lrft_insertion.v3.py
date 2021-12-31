@@ -25,7 +25,7 @@ from operator import itemgetter, attrgetter
 from collections import Counter
 
 
-from lrft_consensus import consensus_seq
+from lrft_consensus_seq import consensus_seq
 
 # help文档
 # if __name__ == '__main__':

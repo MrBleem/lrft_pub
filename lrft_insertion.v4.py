@@ -26,7 +26,7 @@ from operator import itemgetter, attrgetter
 from collections import Counter
 
 
-from lrft_consensus import consensus_seq
+from lrft_consensus_seq import consensus_seq
 # from lrft_get_insertion_position import get_insertion_position
 from lrft_cluster import Cluster_raeds
 

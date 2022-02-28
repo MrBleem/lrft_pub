@@ -16,9 +16,9 @@ done
 # lrft_map.sh -g phaCin -i /data/tusers/boxu/lrft/rawdata/nanopore/Koala -o /data/tusers/boxu/lrft/result/nanopore/Koala -n /data/tusers/boxu/annotation -t /data/tusers/boxu/annotation/hs37d5/phaCin.transposon.fa -s Koala2_20191231_Adelaide_rep1 -c 10
 
 # 
-if_uniq=1
+if_uniq=
 # if_remap=
-if_genome_first=
+if_genome_first=1
 # lrft_temp.sh -g hs37d5 -i /data/tusers/boxu/lrft/rawdata/nanopore -o /data/tusers/boxu/lrft/result/nanopore -s SRR11669560
 
 
@@ -78,6 +78,7 @@ do
 	[ ! -d ${QC}/${SAMPLE} ] && mkdir ${QC}/${SAMPLE}
 	if [ ! -f ${QC}/${SAMPLE}/nanoQC.html ];then
 		nanoQC ${DATA_PATH}/${SAMPLE}*.f*q -o ${QC}/${SAMPLE}
+		echo "skip"
 	else
 		echo "already QC"
 	fi
@@ -96,6 +97,7 @@ do
 	if [ ! -f ${PREFIX}.alignment.TE.sorted.bam ];then
 		echo "map to transposon"
 		minimap2 -a ${ANNO_PATH}/${GENOME}/${TE}.mmi ${filter}/${SAMPLE}.clean.fastq > ${PREFIX}.alignment.TE.sam 
+		# minimap2 -a ${ANNO_PATH}/${GENOME}/${TE}.mmi ${DATA_PATH}/${SAMPLE}*.f*q > ${PREFIX}.alignment.TE.sam 
 		samtools sort -@ ${CPU} -O bam -o ${PREFIX}.alignment.TE.sorted.bam ${PREFIX}.alignment.TE.sam
 		samtools index -@ ${CPU} ${PREFIX}.alignment.TE.sorted.bam
 	else

@@ -8,15 +8,24 @@ import pysam
 
 from lrft_get_insertion_position import get_insertion_position
 
-def Cluster_reads(READS, READS_SEQUENCE, outFile_pickle):
+
+class LongReads(object):
+    def __int__(self, r):
+        self.r = r
+
+
+def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
     READS_CLUSTER={}
     for read in READS:
         # pysam提取reads的基本信息
         # 再前面的处理中，reads的名字中包含部分关于比对到TE上的有关信息
         # eg. SRR11669560.sra.9661265.ALU:ALU1.1.2831.245.9196
         # eg. SRR11669560.sra.12503931.ALU:ALU1.+.11.6487.269.2381
+        # LoRe = LongReads()
+
         if  read.is_supplementary:
             # print(read.qname + ":type:supplementary")
+            # 这里筛选的supplementary的信息，需要怎么处理还是得看这个地方
             continue
         
         if read.is_secondary:   

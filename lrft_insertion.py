@@ -37,7 +37,7 @@ from collections import Counter
 
 from lrft_find_tsd import get_tsd_in_genome
 from lrft_consensus import get_consensus_seq
-from lrft_cluster import Cluster_reads
+from lrft_cluster import Cluster_reads_by_TE
 
 # help文档
 # if __name__ == '__main__':
@@ -118,7 +118,8 @@ READS = bamfile
 # region = '10:9,474,847-9,474,855' # TTTTT
 # region = '10:26,852,961-26,852,978' # AAATAAAAAGAAAA
 # region = '7:107,829,249-107,829,298'
-# region='1:41,593,610-41,602,609'
+# region = '1:41,593,610-41,602,609'
+# region= '1:12,790,468-12,791,007'
 
 # chr = region.split(':')[0]
 # region_start = region.split(':')[1].split('-')[0].replace(',', '')
@@ -166,7 +167,7 @@ def merge_insertion(insertion1, insertion2):
     # if insertion2[0] < new_insertion_s:
     #     new_insertion_s = insertion2[0]
     if insertion2[1] > new_insertion_end:
-        new_insertion_end = insertion2[1]
+        new_insertion_end = insertion2[1] 
     
     if insertion1[6] == "truncked" and insertion2[6] == "truncked":
         insertion_tag = "truncked"
@@ -207,10 +208,19 @@ def record_insertion(ref, te, insertion):
     # align_tsd_file_name = RESULT_PATH + PREFIX +".tsd.temp." + str(test_index) + ".fq"
 
     align_seq_file_name = RESULT_PATH + PREFIX + ".seq.temp.fq"
+
     align_tsd_file_name = RESULT_PATH + PREFIX + ".tsd.temp.fq"
+
+    align_tsd_left_file_name = RESULT_PATH + PREFIX + ".tsd.temp.1.fq"
+    align_tsd_right_file_name = RESULT_PATH + PREFIX + ".tsd.temp.2.fq"
 
     align_seq_file = open( align_seq_file_name, 'w' )
     align_tsd_file = open( align_tsd_file_name, 'w' )
+
+    align_tsd_left_file = open( align_tsd_left_file_name, 'w' )
+    align_tsd_right_file = open( align_tsd_right_file_name, 'w' )
+
+
     ref_seq = genome_fa_seq.fetch(ref, int(insertion_start) - 20 , int(insertion_end) + 19 )
 
     if int(insertion_end) - int(insertion_start) <= 20:
@@ -266,10 +276,18 @@ def record_insertion(ref, te, insertion):
                         insertion_sequence[4] )
 
         # tsd
-        align_tsd_file.write( '>' + read_id + ".left" + '\n' )
-        align_tsd_file.write( insertion_sequence[5] + '\n' )
-        align_tsd_file.write( '>' + read_id + ".right" + '\n' )
-        align_tsd_file.write( insertion_sequence[6] + '\n' )
+        # align_tsd_file.write( '>' + read_id + ".left" + '\n' )
+        # align_tsd_file.write( insertion_sequence[5] + '\n' )
+
+        # align_tsd_file.write( '>' + read_id + ".right" + '\n' )
+        # align_tsd_file.write( insertion_sequence[6] + '\n' )
+
+        # tsd left 和 right 分别先做consensus
+        align_tsd_left_file.write( '>' + read_id + ".left" + '\n' )
+        align_tsd_left_file.write( insertion_sequence[5] + '\n' )
+
+        align_tsd_right_file.write( '>' + read_id + ".right" + '\n' )
+        align_tsd_right_file.write( insertion_sequence[6] + '\n' )
 
         if len(insertion_sequence[5]) >= 15:
             left_tsd_num += 1
@@ -284,7 +302,11 @@ def record_insertion(ref, te, insertion):
 
     # print("TSD_left_right_propotion:" + str(left_tsd_num) +":"+ str(right_tsd_num) )
     align_seq_file.close()
-    align_tsd_file.close()
+    # align_tsd_file.close()
+
+    align_tsd_right_file.close()
+    align_tsd_left_file.close()
+
     fre_cutoff = 0.75
 
 
@@ -293,6 +315,16 @@ def record_insertion(ref, te, insertion):
         tsd_seq = "NA"
     else:
         insertion_type = "novel"
+        tsd_left = get_consensus_seq(align_tsd_left_file_name, fre_cutoff, 'seq')
+        tsd_right = get_consensus_seq(align_tsd_right_file_name, fre_cutoff, 'seq')
+
+        align_tsd_file.write( '>left\n' )
+        align_tsd_file.write( tsd_left + '\n' )
+
+        align_tsd_file.write( '>right\n' )
+        align_tsd_file.write( tsd_right + '\n' )
+        align_tsd_file.close()
+
         tsd_seq  = get_consensus_seq(align_tsd_file_name, fre_cutoff, 'tsd')
     
     # print("type:" + insertion_type + ":TSD_left_right_propotion:" + str(left_tsd_num) +":"+ str(right_tsd_num) )
@@ -335,7 +367,7 @@ if os.path.exists(outFile_pickle):
         READS_CLUSTER = pickle.load(f2)
     print('get reads cluster from pkl file')
 else:
-    READS_CLUSTER = Cluster_reads(READS, READS_SEQUENCE, outFile_pickle)
+    READS_CLUSTER = Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle)
 
 
 
@@ -359,6 +391,7 @@ for ref in READS_CLUSTER:
         supporting_reads = 1
         # j = 0
         flag = '1'
+        # cluster insertion by position
         for j in range(len(TE_CLUSTER[te][1:])):
             insertion = TE_CLUSTER[te][1:][j]
             # 以前一个insertion为参考，判断后一个insertion是否跟前一个有overlap

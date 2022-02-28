@@ -1,5 +1,3 @@
-import datetime
-starttime = datetime.datetime.now()
 
 import re
 import sys
@@ -10,7 +8,6 @@ import pickle
 # import seaborn as sns
 # import matplotlib.pyplot as plt
 
-# python ${BIN_PATH}/lrft_clip_reads.py ${BAM} ${PREFIX}.mapped.sorted.TE.clip.fq ${PREFIX}.mapped.sorted.TE.clip.bed ${PREFIX}.clip.reads.pkl
 
 bamFile=sys.argv[1]
 outFile_fq=sys.argv[2]
@@ -65,15 +62,48 @@ def comp_reverse(seq):
 	return new_seq
 
 
-def record(read_info, g1, g2, READS_PICKLE, t='skip'):
-	print(t)
+# 建立序列的字典
+READS_SEQ_INFO = {}
+bamfile = pysam.AlignmentFile(bamFile, "rb")
+for read in bamfile:
+	name=read.qname
+	read_info = reads_info(read)
+	
+	if name not in READS_SEQ_INFO.keys():
+		READS_SEQ_INFO[name] = [read_info.strand, read_info.seq, read_info.map_qua]
+	else:
+		if read_info.seq != None :
+			if READS_SEQ_INFO[name][1] != None:
+				if len(read_info.seq) > len(READS_SEQ_INFO[name][1]) :
+					READS_SEQ_INFO[name] = [read_info.strand, read_info.seq, read_info.map_qua]
+			else:
+				READS_SEQ_INFO[name] = [read_info.strand, read_info.seq, read_info.map_qua]
+bamfile.close()
+
+
+
+
+READS_PICKLE = {}
+bamfile = pysam.AlignmentFile(bamFile, "rb")
+# 开始拆分reads
+
+
+for read in bamfile:
+	read_info = reads_info(read)
+	if read_info.strand == READS_SEQ_INFO[read_info.name][0]:
+		read_info.seq = READS_SEQ_INFO[read_info.name][1]
+		read_info.map_qua = READS_SEQ_INFO[read_info.name][2]
+	else:
+		read_info.seq = comp_reverse(READS_SEQ_INFO[read_info.name][1])
+		read_info.map_qua = "".join(list(reversed(READS_SEQ_INFO[read_info.name][2])))
+
 	s_cigar = re.findall('\d+[HS]', read_info.cigar)
 	cigar_end = read_info.cigar[-1]
 
 	l_clip_seq_r = 0
 	l_clip_seq_l = 0
 	if len(s_cigar) == 0:
-		return READS_PICKLE
+		continue
 	if len(s_cigar) == 1:
 		l_clip_seq = int(re.split('[HS]', s_cigar[0])[0])
 		if cigar_end == 'S' or cigar_end == 'H' :
@@ -111,69 +141,17 @@ def record(read_info, g1, g2, READS_PICKLE, t='skip'):
 		reads_id = ','.join([read_info.name, read_info.ref, read_info.strand, str(read_info.map_pos), str(l_clip_seq_l), str(insertion_len), str(l_clip_seq_r)] ) # read_info.name+'.'+read_info.ref+'.'+read_info.strand+'.'+str(read_info.map_pos)+'.'+str(l_clip_seq_l)+'.'+str(insertion_len)+'.'+str(l_clip_seq_r)
 		reads_seq = insertion_seq
 		READS_PICKLE[reads_id] = reads_seq
-	return READS_PICKLE
 
-
-
-READS_SEQ_INFO = {}
-READS_PICKLE = {}
-bamfile = pysam.AlignmentFile(bamFile, "rb")
-# 开始拆分reads
-for read in bamfile:
-	read_info = reads_info(read)
-	# if read_info.seq != None:
-	# 	print('seq:'+str(len(read_info.seq)))
-	# else:
-	# 	print('seq:0')
-
-	# if read_info.seq != None and read_info.seq != '*' and (read_info.flag == 0 or read_info.flag == 16):
-	if read_info.flag == '0' or read_info.flag == '16':
-		if read_info.name not in READS_SEQ_INFO.keys():
-			READS_SEQ_INFO[read_info.name] = [[read_info.strand, read_info.seq, read_info.map_qua],[]]
-			record(read_info, g1, g2, READS_PICKLE)
-		else:
-			# recore_read in this name
-			for supply_reads in READS_SEQ_INFO[read_info.name][1]:
-				if supply_reads.strand == read_info.strand:
-					supply_reads.seq = read_info.seq
-					supply_reads.map_qua = read_info.map_qua
-				else:
-					supply_reads.seq = comp_reverse(read_info.seq)
-					supply_reads.map_qua = "".join(list(reversed(read_info.map_qua)))
-				print('ck1')
-				record(supply_reads, g1, g2, READS_PICKLE, 'ck hello')
-				record(read_info, g1, g2, READS_PICKLE, 'ck hello')
-				print('ck2')
-				
-				# recore
-			READS_SEQ_INFO[read_info.name][0] = [ read_info.strand, read_info.seq, read_info.map_qua ]
-			READS_SEQ_INFO[read_info.name][1] = []
-	else:
-		if read_info.name not in READS_SEQ_INFO.keys():
-			READS_SEQ_INFO[read_info.name] = [ ['', '', ''], [read_info] ]
-		else:
-			if READS_SEQ_INFO[read_info.name][0][1] != '':
-				if read_info.strand == READS_SEQ_INFO[read_info.name][0][0]:
-					read_info.seq = READS_SEQ_INFO[read_info.name][0][1]
-					read_info.map_qua = READS_SEQ_INFO[read_info.name][0][2]
-				else:
-					read_info.seq = comp_reverse(READS_SEQ_INFO[read_info.name][0][1])
-					read_info.map_qua = "".join(list(reversed(READS_SEQ_INFO[read_info.name][0][2])))
-				READS_PICKLE = record(read_info, g1, g2, READS_PICKLE, 'ck3')
-			else:
-				READS_SEQ_INFO[read_info.name][1].append(read_info)
-
-print(len(READS_SEQ_INFO.keys()))			
 bamfile.close()
 	
 
 with open(outFile_pickle, "wb") as f1:
 	pickle.dump(READS_PICKLE, f1)
 
+
+
 g1.close()
 g2.close()
 
-endtime = datetime.datetime.now()
-print (endtime - starttime)
 
 

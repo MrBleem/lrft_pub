@@ -1,0 +1,10 @@
+
+-----------
+
+map to genome:
+5194s
+
+-----------
+
+map to TE first and get tcg.bam
+5247s

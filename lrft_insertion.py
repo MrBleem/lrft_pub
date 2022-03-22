@@ -404,7 +404,7 @@ for ref in READS_CLUSTER:
             # if insertion[0] >= insertion_pre[0] and insertion[0] <= insertion_pre[1]+20 and insertion[2] == insertion_pre[2]: ????? insertion[2] == insertion_pre[2]这个是为了判断insertion type 用的
             if insertion[0] >= insertion_pre[0] and insertion[0] <= insertion_pre[1]+20 and insertion[2] == insertion_pre[2] : # 判断方向
                 # print(insertion[2],insertion_pre[2])
-                insertion_pre = merge_insertion(insertion_pre, insertion) 
+                insertion_pre = merge_insertion(insertion_pre, insertion)
                 supporting_reads = supporting_reads + 1
             else:
                 #   mapped_reads是根据insertion的位置，再用pysam计算insertion的位置上有多少条reads比对到了这个位置

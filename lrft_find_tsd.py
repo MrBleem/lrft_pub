@@ -80,18 +80,18 @@ def score_tsd_genome(seq1, seq2):
 def get_tsd_in_genome(tsd_seq, tsd_genome):
     # 把得到的candidate tsd与genome的序列进行比较，看tsd在genome上的位置
     TSD_with_seq = get_candinate_tsd_with_seq(tsd_seq)
-    print('>>>>')
-    print(TSD_with_seq)
+    # print('>>>>')
+    # print(TSD_with_seq)
     # TSD_with_seq = [20,'CAGAC-CG-TATTT']
-    print(tsd_genome)
+    # print(tsd_genome)
     candinate_tsd_with_genome = []
     for i in range(len(tsd_genome)):
         window_genome = tsd_genome[i:i+len(TSD_with_seq[1])]
         candinate_tsd_with_genome.append([i, window_genome, score_tsd_genome(window_genome, TSD_with_seq[1])])
     # print(sorted( candinate_tsd_with_genome, key = itemgetter(2) ))
     tsd_in_genome = sorted( candinate_tsd_with_genome, key = itemgetter(2) )[-1]
-    print(tsd_in_genome)
-    print('<<<<<<')
+    # print(tsd_in_genome)
+    # print('<<<<<<')
     return tsd_in_genome
 
 

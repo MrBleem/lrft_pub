@@ -85,7 +85,8 @@ def get_consensus_seq(align_seq_file, fre_cuoff, type):
     align_sequences[id] = seq.upper()
     
     if type == "seq":
-        align_seq = '\t|\t'.join(consensus_seq(align_sequences, fre_cuoff, type))
+        # align_seq = '\t|\t'.join(consensus_seq(align_sequences, fre_cuoff, type))
+        align_seq = consensus_seq(align_sequences, fre_cuoff, type)[1]
     elif type == "tsd":
         # print(type)
         align_seq = consensus_seq(align_sequences, fre_cuoff,type)[1]

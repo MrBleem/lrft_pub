@@ -66,7 +66,6 @@ def comp_reverse(seq):
 
 
 def record(read_info, g1, g2, READS_PICKLE, t='skip'):
-	print(t)
 	s_cigar = re.findall('\d+[HS]', read_info.cigar)
 	cigar_end = read_info.cigar[-1]
 
@@ -128,9 +127,9 @@ for read in bamfile:
 
 	# if read_info.seq != None and read_info.seq != '*' and (read_info.flag == 0 or read_info.flag == 16):
 	if read_info.flag == '0' or read_info.flag == '16':
+		record(read_info, g1, g2, READS_PICKLE)
 		if read_info.name not in READS_SEQ_INFO.keys():
 			READS_SEQ_INFO[read_info.name] = [[read_info.strand, read_info.seq, read_info.map_qua],[]]
-			record(read_info, g1, g2, READS_PICKLE)
 		else:
 			# recore_read in this name
 			for supply_reads in READS_SEQ_INFO[read_info.name][1]:
@@ -140,11 +139,7 @@ for read in bamfile:
 				else:
 					supply_reads.seq = comp_reverse(read_info.seq)
 					supply_reads.map_qua = "".join(list(reversed(read_info.map_qua)))
-				print('ck1')
-				record(supply_reads, g1, g2, READS_PICKLE, 'ck hello')
-				record(read_info, g1, g2, READS_PICKLE, 'ck hello')
-				print('ck2')
-				
+				record(supply_reads, g1, g2, READS_PICKLE)
 				# recore
 			READS_SEQ_INFO[read_info.name][0] = [ read_info.strand, read_info.seq, read_info.map_qua ]
 			READS_SEQ_INFO[read_info.name][1] = []
@@ -159,7 +154,7 @@ for read in bamfile:
 				else:
 					read_info.seq = comp_reverse(READS_SEQ_INFO[read_info.name][0][1])
 					read_info.map_qua = "".join(list(reversed(READS_SEQ_INFO[read_info.name][0][2])))
-				READS_PICKLE = record(read_info, g1, g2, READS_PICKLE, 'ck3')
+				record(read_info, g1, g2, READS_PICKLE, 'ck3')
 			else:
 				READS_SEQ_INFO[read_info.name][1].append(read_info)
 

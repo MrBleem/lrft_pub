@@ -11,6 +11,11 @@ import re
 #                    ---                  ___                  TSD
 
 
+# 在ciagr的延伸到达clip_left_len的时候，仍然往后判断是否有毛糙的比对
+# 如果是一个比较大的deletion的时候，要把insertion修正到这个地方
+extend_cigar_len = 20
+
+
 # 通过结果来看，这个地方好像是更针对于结构比较清晰的 insertion
 def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len, clip_right_len, cigar):
     # 得到的insertion结果包括 genome上insertion的位置
@@ -67,19 +72,32 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
             if cigar_len_ex_D < clip_left_len:
                 # deletion位置在clip前面的结果
                 if cigar_item[-1] == 'D' and int(cigar_item[:-1]) >= 50: 
-                    if clip_left_len - cigar_len_ex_D < 100:
+                    if clip_left_len - cigar_len_ex_D < 200:
                         insertion_position_start = genome_map_position_start + ( cigar_len_dic['M'] +  cigar_len_dic['D'] - int(cigar_item[:-1])  ) -1
                         insertion_position_end = insertion_position_start + int(cigar_item[:-1])
                         
                         insertion_position_to_clip_left = clip_left_len - cigar_len_ex_D
                         insertion_position_to_clip_right = clip_te_len + insertion_position_to_clip_left - int(cigar_item[:-1])
+                        for j in range(extend_cigar_len):
+                            if i+j+1 < cigar_list_len-1:
+                                cigar_item_next = cigar_list[i+j+1]
+                                cigar_len = cigar_len + int(cigar_item_next[:-1])
+                                cigar_len_dic[cigar_item_next[-1]] = cigar_len_dic[cigar_item_next[-1]] + int(cigar_item_next[:-1])
+                                cigar_len_ex_D = cigar_len_dic['S'] + cigar_len_dic['M'] + cigar_len_dic['I']
 
+                                if abs(cigar_len_ex_D - clip_left_len) <= 40 and  cigar_item_next[-1] == 'D'  and int(cigar_item_next[:-1]) >= 50: 
+                                    insertion_position_end = genome_map_position_start + ( cigar_len_dic['D'] +  cigar_len_dic['M'] ) -1                                
+                                    insertion_position_to_clip_left = 0
+                                    insertion_position_to_clip_right = cigar_len_ex_D - clip_left_len
+
+                                    query_position = [ clip_left_len - insertion_position_to_clip_left,  clip_left_len , clip_left_len  + insertion_position_to_clip_right ]
+                                    break
                         if insertion_position_to_clip_right > 0:
                             query_position = [ cigar_len_ex_D, clip_left_len, clip_left_len ]
                         else:
                             query_position = [ cigar_len_ex_D, clip_left_len, clip_left_len - insertion_position_to_clip_right ]
-
                         break
+                
                 if i < cigar_list_len - 1:
                     cigar_item_next = cigar_list[i+1]
                     if cigar_item_next[-1]=='H' or cigar_item_next[-1]=='S':
@@ -114,7 +132,7 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
                     # deletion在clip位置后面的情况
                     # 在insertion位置两边延伸一个大概TSD的长度
                     # 
-                    for j in range(14):
+                    for j in range(extend_cigar_len):
                         if i+j+1 < cigar_list_len-1:
                             cigar_item_next = cigar_list[i+j+1]
                             cigar_len = cigar_len + int(cigar_item_next[:-1])
@@ -132,6 +150,7 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
                     
 
                 elif cigar_item[-1] == 'I':
+                    print('ckkkk')
                     insertion_position_start = genome_map_position_start + ( cigar_len_dic['M'] + cigar_len_dic['D'] ) -1
                     insertion_position_end = insertion_position_start + 1
 
@@ -139,6 +158,20 @@ def get_insertion_position(genome_map_position_start, clip_te_len, clip_left_len
                     insertion_position_to_clip_right = int(cigar_item[:-1]) - insertion_position_to_clip_left
                                        
                     query_position = [clip_left_len - insertion_position_to_clip_left, clip_left_len, clip_left_len + insertion_position_to_clip_right ]
+                    for j in range(extend_cigar_len):
+                        if i+j+1 < cigar_list_len-1:
+                            cigar_item_next = cigar_list[i+j+1]
+                            cigar_len = cigar_len + int(cigar_item_next[:-1])
+                            cigar_len_dic[cigar_item_next[-1]] = cigar_len_dic[cigar_item_next[-1]] + int(cigar_item_next[:-1])
+                            cigar_len_ex_D = cigar_len_dic['S'] + cigar_len_dic['M'] + cigar_len_dic['I']
+
+                            if abs(cigar_len_ex_D - clip_left_len) <= 40 and  cigar_item_next[-1] == 'D'  and int(cigar_item_next[:-1]) >= 50: 
+                                insertion_position_end = genome_map_position_start + ( cigar_len_dic['D'] +  cigar_len_dic['M'] ) -1                                
+                                insertion_position_to_clip_left = 0
+                                insertion_position_to_clip_right = cigar_len_ex_D - clip_left_len
+
+                                query_position = [ clip_left_len - insertion_position_to_clip_left,  clip_left_len , clip_left_len  + insertion_position_to_clip_right ]
+                                break
 
                 # elif s[-1] == 'D':
                 # 不存在D的情况，因为碱基的累积不会停在缺失的地方

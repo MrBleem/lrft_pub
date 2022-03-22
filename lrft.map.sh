@@ -17,8 +17,8 @@ done
 
 # 
 if_uniq=
-# if_remap=
-if_genome_first=1
+if_remap=
+if_genome_first=
 # lrft_temp.sh -g hs37d5 -i /data/tusers/boxu/lrft/rawdata/nanopore -o /data/tusers/boxu/lrft/result/nanopore -s SRR11669560
 
 
@@ -48,6 +48,7 @@ summary=${nanoplot}/summary
 filter=${OUT_PATH}/filter
 map=${OUT_PATH}/map
 insertion=${OUT_PATH}/insertion
+temp=${OUT_PATH}/temp
 
 [ ! -d ${OUT_PATH} ] && mkdir ${OUT_PATH}
 [ ! -d ${QC} ] && mkdir ${QC}
@@ -56,6 +57,7 @@ insertion=${OUT_PATH}/insertion
 [ ! -d ${filter} ] && mkdir ${filter}
 [ ! -d ${map} ] && mkdir ${map}
 [ ! -d ${insertion} ] && mkdir ${insertion}
+[ ! -d ${temp} ] && mkdir ${temp}
 
 # checking index
 if [ ! -f ${ANNO_PATH}/${GENOME}/${GENOME}.mmi ];then
@@ -72,12 +74,12 @@ for SAMPLE in ${SAMPLES[*]}
 do
 # 	echo "### ${SAMPLE}"
 	echo -e "\033[40;32;1m### ${SAMPLE}\033[0m"
-	PREFIX=${OUT_PATH}/map/${SAMPLE}_${TE_QC}
+	PREFIX=${OUT_PATH}/map/${SAMPLE}
 	
 	echo ">>>>>>>>>>>-----step1 : QC-----<<<<<<<<<<"
 	[ ! -d ${QC}/${SAMPLE} ] && mkdir ${QC}/${SAMPLE}
 	if [ ! -f ${QC}/${SAMPLE}/nanoQC.html ];then
-		nanoQC ${DATA_PATH}/${SAMPLE}*.f*q -o ${QC}/${SAMPLE}
+		# nanoQC ${DATA_PATH}/${SAMPLE}*.f*q -o ${QC}/${SAMPLE}
 		echo "skip"
 	else
 		echo "already QC"
@@ -299,12 +301,12 @@ do
 		fi
 		BAM=${PREFIX}.mapped.genome.sorted.bam
 	
-		echo ">>>>>>>>>>>-----step? : test tldr -----<<<<<<<<<<"
-		if [ ! -f ${insertion}/${SAMPLE}.table.txt ];then
-			tldr -b ${BAM} -e ${TE_REF} -r ${GENOME_REF} --color_consensus -o ${insertion}/${SAMPLE}
-		else
-			echo "alrady detect insertion"
-		fi
+		# echo ">>>>>>>>>>>-----step? : test tldr -----<<<<<<<<<<"
+		# if [ ! -f ${insertion}/${SAMPLE}.table.txt ];then
+		# 	tldr -b ${BAM} -e ${TE_REF} -r ${GENOME_REF} --color_consensus -o ${insertion}/${SAMPLE}
+		# else
+		# 	echo "alrady detect insertion"
+		# fi
 	fi
 	##################################################################################################################################
 	

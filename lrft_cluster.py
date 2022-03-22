@@ -7,15 +7,16 @@ import pickle
 import pysam
 
 from lrft_get_insertion_position import get_insertion_position
-
+from memory_profiler import profile
 
 class LongReads(object):
     def __int__(self, r):
         self.r = r
 
-
-def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
-    READS_CLUSTER={}
+# @profile
+def Cluster_reads_by_TE(READS, READS_SEQUENCE):
+    print('?')
+    READS_CLUSTER=[]
     for read in READS:
         # pysam提取reads的基本信息
         # 再前面的处理中，reads的名字中包含部分关于比对到TE上的有关信息
@@ -30,13 +31,14 @@ def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
         
         if read.is_secondary:   
             # print(read.qname + ":type:secondary")
-            if read.query_sequence == None or read.cigar == None:
-                continue  
+            #if read.query_sequence == None or read.cigar == None:
+            continue  
+        print(read.qname)
         name = read.qname.split(',') # reads name的分隔符
         ref = read.reference_name
         seq = read.query_sequence
-        if ref not in READS_CLUSTER:
-            READS_CLUSTER[ref] =  {}
+        # if ref not in READS_CLUSTER:
+        #     READS_CLUSTER[ref] =  []
         reads_id = read.qname
         
         clip_left_len = int(name[4])
@@ -78,7 +80,8 @@ def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
 
         # reads 要跨过insertion position 30 bp
         # spanding_length
-        if  clip_left_len - cigar_len_S_start <= 30 or   clip_right_len - cigar_len_S_end <= 30:
+        # 300现在是可以排除一些两个insertion连在一起的情况
+        if  clip_left_len - cigar_len_S_start <= 300 or   clip_right_len - cigar_len_S_end <= 300:
             insertion_tag = "truncked"
         else:
             insertion_tag = 'spaned'
@@ -92,8 +95,8 @@ def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
 
         insertion_position = get_insertion_position(int(map_pos), int(clip_te_len), int(clip_left_len), int(clip_right_len), cigar)
         # print(reads_id, insertion_position[0], insertion_position[1])
-        if TE not in READS_CLUSTER[ref]:
-            READS_CLUSTER[ref][TE] = []
+        # if TE not in READS_CLUSTER[ref]:
+        #     READS_CLUSTER[ref][TE] = []
             
         # 一条reads断点两端的序列信息记录
         # 通过断点周围的信息，
@@ -112,20 +115,20 @@ def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
 
         if query_position[0] == query_position[1] :
             candinate_TSD_left = ''
-            candinate_TSD_right = seq[ int(query_position[2]) - 15 : int(query_position[2]) ] + seq[ int(query_position[2]) : int(query_position[2] + 15) ]
+            candinate_TSD_right = seq[ int(query_position[2]) - 20 : int(query_position[2]) ] + seq[ int(query_position[2]) : int(query_position[2] + 20) ]
         elif query_position[1] == query_position[2]:
-            candinate_TSD_left = seq[ int(query_position[0]) - 15 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[0]) + 15 ]
+            candinate_TSD_left = seq[ int(query_position[0]) - 20 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[0]) + 20 ]
             candinate_TSD_right = ''
         else:
-            if query_position[1] - query_position[0] < 15:
-                candinate_TSD_left = seq[ int(query_position[0]) - 15 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[1]) ]
+            if query_position[1] - query_position[0] < 20:
+                candinate_TSD_left = seq[ int(query_position[0]) - 20 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[1]) ]
             else:
-                candinate_TSD_left = seq[ int(query_position[0]) - 15 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[0]) + 15 ]
+                candinate_TSD_left = seq[ int(query_position[0]) - 20 : int(query_position[0]) ] + seq[ int(query_position[0]) : int(query_position[0]) + 20 ]
 
-            if query_position[2] - query_position[1] < 15:
-                candinate_TSD_right = seq[ int(query_position[1]) : int(query_position[2]) ] + seq[ int(query_position[2]) : int(query_position[2] + 15) ]
+            if query_position[2] - query_position[1] < 20:
+                candinate_TSD_right = seq[ int(query_position[1]) : int(query_position[2]) ] + seq[ int(query_position[2]) : int(query_position[2] + 20) ]
             else:
-                candinate_TSD_right = seq[ int(query_position[2]) - 15 : int(query_position[2]) ] + seq[ int(query_position[2]) : int(query_position[2] + 15) ]
+                candinate_TSD_right = seq[ int(query_position[2]) - 20 : int(query_position[2]) ] + seq[ int(query_position[2]) : int(query_position[2] + 20) ]
 
 
 
@@ -139,7 +142,7 @@ def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
         cilp_seq =  reads_id  + "|" + \
                     TE_strand  + "|" + \
                     genome_strand + "|" + \
-                    seq[ int(query_position[0]) - 50 : int(query_position[0]) ] + "|" + \
+                    seq[ int(query_position[0]) - 100 : int(query_position[0]) ] + "|" + \
                     seq[ int(query_position[0]) : int(query_position[1]) ]  + "|" + \
                     cilp_te   + "|" + \
                     seq[ int(query_position[1]) : int(query_position[2]) ]  + "|" + \
@@ -153,10 +156,11 @@ def Cluster_reads_by_TE(READS, READS_SEQUENCE, outFile_pickle):
             insertion_type = "novel"
 
 
-        READS_CLUSTER[ref][TE].append([insertion_position[0], insertion_position[1], genome_strand, insertion_type, clip_te_len, cilp_seq, insertion_tag])
+        # READS_CLUSTER[ref][TE].append([insertion_position[0], insertion_position[1], genome_strand, insertion_type, clip_te_len, cilp_seq, insertion_tag, TE])
+        READS_CLUSTER.append([insertion_position[0], insertion_position[1], genome_strand, insertion_type, clip_te_len, cilp_seq, insertion_tag, TE])
 
-    with open(outFile_pickle, "wb") as f1:
-        pickle.dump(READS_CLUSTER, f1)
+    # with open(outFile_pickle, "wb") as f1:
+    #     pickle.dump(READS_CLUSTER, f1)
     
     return READS_CLUSTER
 
